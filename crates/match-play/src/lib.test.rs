@@ -6,16 +6,16 @@ use std::path::PathBuf;
 use foray_core::board::Team;
 
 use super::*;
-use crate::test_case::{
-    AssetDimension, AssetKind, BuildCommands, ContractSpec, SandboxSpec, SimulationSpec,
-    TestCaseVersion, TestType,
+use test_cabinet_contracts::engine::NONE_SLUG;
+use test_cabinet_contracts::test_case::{
+    AssetDimension, AssetKind, BuildCommands, ContractSpec, EngineSupport, SandboxSpec,
+    SimulationSpec, TestCaseVersion, TestType,
 };
 
-/// A copy of the committed Foray case folder under `testdata/definitions/`, where the
-/// baseline `references/*.wasm` live.
+/// A copy of the committed Foray case's baselines: the `references/*.wasm` every
+/// match below is played between.
 fn case_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("testdata/definitions/test-cases/adversarial/easy/foray/v1.0.0")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("testdata/foray")
 }
 
 /// A Foray version rooted at the real case, with a low `max_ticks` so a match
@@ -81,7 +81,7 @@ fn foray_version(max_ticks: u32) -> TestCaseVersion {
         init: None,
         asset_paths: Vec::new(),
         packages: Vec::new(),
-        engines: vec![crate::EngineSupport::unbounded(crate::engine::NONE_SLUG)],
+        engines: vec![EngineSupport::unbounded(NONE_SLUG)],
         variants: Vec::new(),
         common_references: Vec::new(),
         common_proofs: Vec::new(),
@@ -151,13 +151,6 @@ fn outcome_from_reads_each_side_of_a_decided_match() {
         outcome_from(both_forfeited, Team::Red),
         AdversarialOutcome::Forfeit
     );
-}
-
-#[test]
-fn match_id_is_stable_and_segment_safe() {
-    let id = match_id("border-soldier", "random");
-    assert_eq!(id, "border-soldier__vs__random");
-    assert!(!id.contains('/'), "a match id must be a safe path segment");
 }
 
 #[test]
@@ -281,36 +274,6 @@ fn a_tournament_runs_every_pair_once_and_ranks_by_wins() {
 }
 
 #[test]
-fn arena_opponents_are_the_baselines_plus_the_hidden_references() {
-    // `ARENA_OPPONENT_IDS` is the resolve allowlist; it must stay exactly the
-    // model-facing baselines followed by the hidden references, or a hidden
-    // opponent silently becomes unresolvable (or a baseline leaks its hidden
-    // status). Asserting the concatenation keeps the three constants in sync.
-    let expected: Vec<&str> = BASELINE_IDS
-        .iter()
-        .chain(HIDDEN_OPPONENT_IDS.iter())
-        .copied()
-        .collect();
-    assert_eq!(ARENA_OPPONENT_IDS.to_vec(), expected);
-}
-
-#[test]
-fn auto_replay_opponents_are_arena_opponents_and_only_random_is_unscored() {
-    // The canonical opponent must be `border-soldier`, every auto-replay opponent
-    // must be resolvable (in the arena allowlist), and the only unscored
-    // exhibition is `random`.
-    assert_eq!(AUTO_REPLAY_OPPONENTS[0].0, "border-soldier");
-    assert!(AUTO_REPLAY_OPPONENTS[0].1, "canonical is scored");
-    for (id, scored) in AUTO_REPLAY_OPPONENTS {
-        assert!(
-            ARENA_OPPONENT_IDS.contains(id),
-            "auto-replay opponent `{id}` must be a resolvable arena opponent",
-        );
-        assert_eq!(*scored, *id != "random", "only random is unscored: {id}");
-    }
-}
-
-#[test]
 fn every_arena_opponent_resolves_from_the_committed_case() {
     // The case must ship a `references/<id>.wasm` for every arena opponent,
     // including the hidden `fuel-probe` — otherwise auto-replay generation or an
@@ -324,8 +287,59 @@ fn every_arena_opponent_resolves_from_the_committed_case() {
 }
 
 #[test]
-fn replay_filename_is_canonical_then_indexed() {
-    assert_eq!(replay_filename(0), "replay.json");
-    assert_eq!(replay_filename(1), "replay-1.json");
-    assert_eq!(replay_filename(3), "replay-3.json");
+fn play_match_reports_a_controller_that_fails_to_load() {
+    let version = foray_version(64);
+    let good = resolve_baseline(&version, "random").expect("baseline");
+
+    let played = play_match(&version, "red", b"\0not-wasm", "blue", &good).expect("played");
+    assert!(
+        matches!(
+            played,
+            Played::LoadFailed {
+                team: Team::Red,
+                ..
+            }
+        ),
+        "{played:?}"
+    );
+    let played = play_match(&version, "red", &good, "blue", b"\0not-wasm").expect("played");
+    assert!(
+        matches!(
+            played,
+            Played::LoadFailed {
+                team: Team::Blue,
+                ..
+            }
+        ),
+        "{played:?}"
+    );
+}
+
+#[test]
+fn a_case_missing_its_match_sections_names_each_one() {
+    let mut version = foray_version(64);
+    version.simulation = None;
+    version.contract = None;
+    let err = canonical_match_setup(&version, "red", "blue").expect_err("no setup");
+    assert!(matches!(err, Error::Case(_)));
+    assert_eq!(
+        err.to_string(),
+        "test case `foray@v1.0.0` declares no [contract], [simulation] for its adversarial match"
+    );
+}
+
+#[test]
+fn a_run_controller_resolves_from_the_run_output_dir() {
+    let version = foray_version(64);
+    let out = tempfile::tempdir().expect("tempdir");
+    let module = out
+        .path()
+        .join("run-1/implementation/target/wasm32-unknown-unknown/release/controller.wasm");
+    std::fs::create_dir_all(module.parent().expect("parent")).expect("dirs");
+    std::fs::write(&module, b"wasm").expect("module");
+
+    let bytes = resolve_run_controller(out.path(), "run-1", &version).expect("resolves");
+    assert_eq!(bytes, b"wasm");
+    let missing = resolve_run_controller(out.path(), "run-2", &version).expect_err("missing");
+    assert!(matches!(missing, Error::Io(_)));
 }
