@@ -33,6 +33,7 @@ export default defineConfig({
           sequence: { groupOrder: 1 },
         },
       },
+      "packages/lattice-runtime",
       "packages/particle-runtime",
       "packages/simple-2d/vitest.config.ts",
       "packages/simple-3d/vitest.config.ts",
