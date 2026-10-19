@@ -4,8 +4,10 @@
 // a bed asked for on one frame starts on a later one — and a drive runs its whole
 // count inside ONE evaluation in the page, where nothing the page awaits can
 // settle. These two waits step a frame at a time for exactly that reason, and the
-// fixture's bed reproduces it: it is asked for on one frame and starts a turn of
-// the event loop later.
+// fixture's bed reproduces it: it is asked for on one frame, its decode settles a
+// turn of the event loop later, and it starts on the first tick after that. Its
+// start is counted in ticks, never in wall-clock time, so how slowly the host
+// gets from one crossing to the next cannot move it onto the asking frame.
 
 import { afterEach, beforeEach, expect, it } from "vitest";
 import { stepUntilBed, stepUntilSound } from "../src/index";
