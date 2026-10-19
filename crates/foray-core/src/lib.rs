@@ -9,9 +9,9 @@
 //! and **no wasm-host dependency**: the wasm host (wasmtime) lives entirely in
 //! `foray-cli`, and the browser boundary is the hand-rolled C ABI in `abi`.
 //!
-//! The authoritative narrative lives in the design docs:
-//! `apps/docs/src/content/docs/testing/adversarial/` (the test-type framing) and
-//! `.../foray/` (Foray's rules, architecture, and replay format).
+//! The authoritative narrative lives in the design docs: the adversarial
+//! testing pages (the test-type framing) and Foray's own pages (its rules,
+//! architecture, and replay format).
 //!
 //! ## Map of the crate
 //!

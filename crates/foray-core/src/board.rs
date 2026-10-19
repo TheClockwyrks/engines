@@ -9,7 +9,7 @@
 //! - [`Board::generate`] — the deterministic generator. It builds **one half**
 //!   and mirrors every wall, nest, seed, and jelly across the centre line, so
 //!   neither colony ever starts with a structural advantage (the core promise of
-//!   the [overview](../../../apps/docs/.../overview.md)).
+//!   Foray's design overview).
 //! - [`Board::from_map`] — the TOML map loader, for human-authored or committed
 //!   maps. A loaded map records its `seed` so a replay that names the map id can
 //!   regenerate the identical maze in the browser without shipping the file.

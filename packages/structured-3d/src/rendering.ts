@@ -8,7 +8,7 @@
  * A build writes simulation; the picture is engine code.
  *
  * The per-frame sequence is fixed and is the contract this module implements.
- * Numbered as the [rendering](../../../apps/docs/src/content/docs/engines/structured-3d/apis/rendering.md)
+ * Numbered as the [rendering](../docs/rendering.md)
  * page numbers it:
  *
  * 1. The camera is updated — a world following a view target takes that
@@ -49,7 +49,7 @@
  *    one is refused by the constructor — naming the canvas — instead of failing
  *    somewhere inside three with a message about a build the author did not
  *    write. Every construction refusal is raised in the order
- *    [the errors table](../../../apps/docs/src/content/docs/engines/structured-3d/apis/engine.md)
+ *    [the errors table](../docs/README.md#errors)
  *    lists them, and no renderer is built for an engine that will not be
  *    returned.
  * 3. **`autoClear` is off and every clear is explicit.** The whole canvas is

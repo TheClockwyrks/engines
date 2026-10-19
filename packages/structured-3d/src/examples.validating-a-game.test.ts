@@ -40,7 +40,7 @@ import type { ActorSpec, World } from "./worlds";
 
 /**
  * The "Validating a Game" worked example, transcribed from
- * `apps/docs/src/content/docs/engines/structured-3d/examples/validating-a-game.md`
+ * `https://docs.testcabinet.ai/engines/structured-3d/examples/validating-a-game/`
  * and run.
  *
  * The page is a case's whole validation surface: the case's constants, the

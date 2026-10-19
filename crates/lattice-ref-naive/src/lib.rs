@@ -1,7 +1,7 @@
 //! `naive` — the obvious engine, and the honest floor of the performance case.
 //!
 //! It does exactly what the [architecture
-//! doc](../../../apps/docs/src/content/docs/testing/performance/lattice/architecture.md)
+//! doc](https://docs.testcabinet.ai/testing/performance/lattice/architecture/)
 //! describes a naive engine doing: simulate the whole scenario one tick at a time
 //! from an empty start, and at each tick *move every item on every belt one step*,
 //! advancing every machine. That is `O(ticks x items)` work — and on a large

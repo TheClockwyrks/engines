@@ -28,7 +28,7 @@ import type { GlStub } from "./testing/gl";
 
 /**
  * The "Validating a Game" worked example, transcribed from
- * `apps/docs/src/content/docs/engines/simple-3d/examples/validating-a-game.md`
+ * `https://docs.testcabinet.ai/engines/simple-3d/examples/validating-a-game/`
  * and run.
  *
  * The page is one complete validator suite for a small game, written the way a

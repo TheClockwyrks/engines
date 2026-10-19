@@ -1,5 +1,5 @@
 //! Behaviour tests for the one-tick advance — the tricky cases the
-//! [references doc](apps/docs/.../references.md) calls out: a single side-loaded
+//! lattice references doc calls out: a single side-loaded
 //! lane, a backed-up inserter, a saturated splitter, an assembler starved then
 //! flooded, compaction relax-back, and source stall.
 //!

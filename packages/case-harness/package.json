@@ -1,8 +1,12 @@
 {
   "name": "@clockwyrks/case-harness",
-  "version": "0.0.0",
-  "private": true,
+  "version": "1.1.0",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/TheClockwyrks/engines.git",
+    "directory": "packages/case-harness"
+  },
   "type": "module",
   "description": "The shared engineless (none) validation harness and canvas recorder a test case's validator project is built on: the browser lifecycle, the driven-frame loop, the injected draw-command recorder, and the readings a check makes over them.",
   "exports": {
@@ -22,5 +26,8 @@
     "playwright": "1.63.0",
     "typescript": "^6",
     "vitest": "^5"
+  },
+  "publishConfig": {
+    "registry": "https://pkgs.dev.azure.com/genyume/the-test-cabinet/_packaging/the-test-cabinet/npm/registry/"
   }
 }

@@ -6,7 +6,7 @@
  * are produced from Rust via contract-codegen; at the time of writing that codegen has
  * not yet emitted a particle-system type, so the system shapes below are declared
  * locally, matching the documented `system.json` contract (see
- * `apps/docs/.../testing/asset-generation/particle-binaries.md`). The one shared enum
+ * the particle binaries' `system.json` reference). The one shared enum
  * that already exists in the generated package — {@link InterpSpec}, the F-curve
  * interpolation — is re-exported from there so there is a single source of truth for
  * it, exactly as `@clockwyrks/voxel-runtime`'s contract re-exports the rig types.

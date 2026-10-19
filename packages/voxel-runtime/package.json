@@ -1,8 +1,12 @@
 {
   "name": "@clockwyrks/voxel-runtime",
-  "version": "0.0.0",
-  "private": true,
+  "version": "1.1.0",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/TheClockwyrks/engines.git",
+    "directory": "packages/voxel-runtime"
+  },
   "type": "module",
   "description": "Framework-agnostic voxel rig posing/clip playback plus an optional three.js binding, consumed by the in-repo viewer and real games.",
   "main": "./dist/index.js",
@@ -26,7 +30,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@clockwyrks/asset-contract": "*"
+    "@clockwyrks/asset-contract": "0.2.0"
   },
   "peerDependencies": {
     "three": "~0.185.0"
@@ -36,5 +40,8 @@
     "three": "~0.185.0",
     "typescript": "^6",
     "vitest": "^5"
+  },
+  "publishConfig": {
+    "registry": "https://pkgs.dev.azure.com/genyume/the-test-cabinet/_packaging/the-test-cabinet/npm/registry/"
   }
 }

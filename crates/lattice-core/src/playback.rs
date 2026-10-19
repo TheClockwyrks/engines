@@ -1,8 +1,8 @@
 //! Browser-playback driver: a scenario stepped one tick at a time, emitting the
 //! canonical state each tick for a renderer to draw.
 //!
-//! This is the engine half of the [browser
-//! visualization](../../../apps/docs/src/content/docs/testing/performance/lattice/architecture.md):
+//! This is the engine half of the browser visualization (the lattice
+//! architecture doc's browser playback):
 //! the site ships no second simulation, it loads *this* crate compiled to
 //! `wasm32-unknown-unknown` and steps it. The renderer holds **no rules of its
 //! own** — every position, phase, and count it draws comes from here.

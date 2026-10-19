@@ -1,0 +1,134 @@
+# The workspace of the engines repository. Every crate under crates/ is a
+# member; add a crate by adding its directory.
+[workspace]
+# The resolver of edition 2024, the monorepo's, so a crate resolves the same
+# features and the same MSRV-aware versions on both sides of an extraction.
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+edition = "2024"
+version = "0.0.0"
+license = "MIT"
+repository = "https://github.com/TheClockwyrks/engines"
+# A crate of The Test Cabinet is consumed by its git source, never from
+# crates.io, so none is published; a member says `publish.workspace = true`, and
+# Cargo refuses that key when the root holds none to inherit.
+publish = false
+
+# Warnings-as-errors, baked into the manifests for every member crate that
+# opts in with `[lints] workspace = true`, so a plain `cargo build` enforces
+# the policy the clippy gate enforces on the command line.
+[workspace.lints.rust]
+warnings = "deny"
+
+[workspace.lints.clippy]
+all = "deny"
+
+# The crates of the other repositories this one may depend on, each at its
+# public source, the GitHub mirror, and the tag its dependents pin. The
+# superrepo's .cargo/config.toml redirects every one of these to the sibling
+# checkout, so a build inside the superrepo never fetches them. A manifest
+# never names an Azure URL or a path outside the repository: the
+# dependency-edges gate refuses both.
+[workspace.dependencies]
+test-cabinet-contracts = { git = "https://github.com/TheClockwyrks/contracts", tag = "v0.2.0" }
+test-cabinet-suites = { git = "https://github.com/TheClockwyrks/contracts", tag = "v0.2.0" }
+
+# The third-party crates the members share, at the requirements the monorepo
+# held them to when the crates were extracted from it.
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+toml = "0.8"
+tempfile = "3"
+# JSON Schema generation, feature-gated so normal, CLI and wasm builds never
+# compile it: the `schema` feature of `foray-core` and `lattice-core` emits the
+# per-tick contract schemas each adversarial and performance test case seeds
+# verbatim (a drift test holds the on-disk copies to the engine types).
+schemars = "1"
+# The wasm host of the adversarial and performance matches (`foray-host`,
+# `lattice-host`). Pure Rust, so it builds on minimal hosts. `cranelift` is the
+# JIT; `cache` is dropped because matches run in ephemeral run containers where
+# a compile cache buys nothing. Pinned to the major version the hosts were
+# written against so a minor bump never silently changes the fuel and epoch
+# semantics the sandbox relies on.
+#
+# `gc` and `gc-null` are the feature set every consumer that also links gg's
+# sandbox builds wasmtime with (Cargo features are additive across a
+# workspace). Both hosts turn GC types back off on their own `Config`, so the
+# modules they accept do not depend on it; naming the same features here keeps
+# this repository's build of the hosts the one its consumers link.
+wasmtime = { version = "45", default-features = false, features = [
+	"cranelift",
+	"gc",
+	"gc-null",
+	"runtime",
+] }
+
+# `foray-core` is a `cdylib` (it compiles to `wasm32-unknown-unknown` for the
+# browser playback ABI). On the native host the same `cdylib` is still emitted
+# as an otherwise unused `.so`, and rustc's incremental codegen for a `cdylib`
+# split across the dev profile's many codegen units intermittently drops a
+# `*.rcgu.o` object, so the linker fails with "cannot find …rcgu.o: No such file
+# or directory" on a second incremental build. Pinning this one package to a
+# single codegen unit makes incremental codegen emit one object and removes the
+# race; it only affects `foray-core`'s native compile, not the wasm build.
+[profile.dev.package.foray-core]
+codegen-units = 1
+
+# `lattice-core` is a `cdylib` for the same reason as `foray-core` (its
+# playback ABI is what `@clockwyrks/lattice-runtime` loads in the browser), so
+# it carries the same codegen-unit pin.
+#
+# `opt-level` is pinned for a separate reason. `lattice-core` is the lattice
+# oracle, deliberately written for clarity rather than speed: the per-tick
+# advance walks explicit item lists, which is the whole point of the test case.
+# `lattice-cli`'s three bus-invariant generate tests each solve fourteen
+# 30,000-tick bus scenarios; unoptimised, one 48x32 scenario takes 7.0s and one
+# 72x40 takes 10.8s, so each test would take minutes, against 0.39s and 0.57s
+# optimised. This cannot move the oracle's answers: the engine is pure integer
+# fixed-point (the crate holds no float), and the solved output is
+# byte-identical either way.
+[profile.dev.package.lattice-core]
+codegen-units = 1
+opt-level = 3
+
+# The two reference engines are `cdylib`s (they compile to
+# `wasm32-unknown-unknown` to load in the sandbox), so a native test build hits
+# the same incremental-codegen race; one codegen unit each for the dev profile.
+# It does not affect the wasm release build the validator and container produce.
+[profile.dev.package.lattice-ref-naive]
+codegen-units = 1
+
+[profile.dev.package.lattice-ref-transport]
+codegen-units = 1
+
+# The cranelift and wasmtime compile path the hosts' tests run on every match,
+# optimised so a test build compiles a controller module as fast as the
+# monorepo's profile did; none is a member, so no behaviour under test changes.
+[profile.dev.package.cranelift-codegen]
+opt-level = 3
+
+[profile.dev.package.wasmtime]
+opt-level = 3
+
+[profile.dev.package.wasmtime-environ]
+opt-level = 3
+
+[profile.dev.package.wasmtime-internal-cranelift]
+opt-level = 3
+
+[profile.dev.package.regalloc2]
+opt-level = 3
+
+[profile.dev.package.wasmparser]
+opt-level = 3
+
+# Line tables alone as the debug info of a development build, which the test
+# profile inherits, as the monorepo builds: a panic and a backtrace keep their
+# files and lines, and the build holds less memory and writes less.
+[profile.dev]
+debug = "line-tables-only"

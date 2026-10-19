@@ -23,7 +23,7 @@ import { GameMode, GameState, PlayerState } from "./game-mode";
  * match played to a score limit — transcribed as faithfully as the test
  * environment allows and then asserted against the outcomes the page narrates.
  *
- * Source: apps/docs/src/content/docs/engines/structured-2d/examples/game-mode-and-scoring.md
+ * Source: https://docs.testcabinet.ai/engines/structured-2d/examples/game-mode-and-scoring/
  *
  * The example's modules are inlined below in their documented order, verbatim
  * except for what a test forces: the package specifier becomes the local

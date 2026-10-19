@@ -1,0 +1,7 @@
+# The kit this repository was rendered from, written by the superrepo's
+# scripts/repos/render.py from the answers in .copier-answers.yml. `name`
+# decides the dependency edges the dependency-edges gate permits, and `kind`
+# the shape the kit gave the repository.
+name = "engines"
+kind = "library"
+description = "The authored engines, the playback runtimes, the case harness, and the adversarial and performance runtimes with the match runner."

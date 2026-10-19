@@ -1,0 +1,10 @@
+# The answers this repository was rendered with and the superrepo commit its
+# kit was last rendered or updated from. Copier maintains it through the
+# superrepo's scripts/repos/render.py; a change made here is overwritten by
+# the next update.
+_commit: v0.6.3-5029-ga68108bb7
+_src_path: ..
+description: The authored engines, the playback runtimes, the case harness, and the
+    adversarial and performance runtimes with the match runner.
+kind: library
+name: engines

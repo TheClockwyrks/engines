@@ -39,7 +39,7 @@ import type { InstalledContexts } from "./testing/canvas";
 /**
  * The documentation's "Game Mode and Scoring" example — Rally, the two-player
  * match played to a score limit — transcribed from
- * `apps/docs/src/content/docs/engines/structured-3d/examples/game-mode-and-scoring.md`
+ * `https://docs.testcabinet.ai/engines/structured-3d/examples/game-mode-and-scoring/`
  * and run.
  *
  * The example's modules appear below in the page's order, verbatim except for

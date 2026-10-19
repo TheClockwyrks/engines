@@ -1,5 +1,5 @@
 //! The authoritative simulation engine for **Lattice** (on-disk slug
-//! `lattice`), the first [performance](../../../apps/docs/) test
+//! `lattice`), the first performance test
 //! case.
 //!
 //! This crate is the single source of truth for the simulation's rules,
@@ -16,10 +16,9 @@
 //! instantiates and steps (see `playback`, feature `playback`). The wasm host
 //! (wasmtime) lives in `lattice-host`, never here.
 //!
-//! The authoritative narrative lives in the design docs:
-//! `apps/docs/src/content/docs/testing/performance/` (the test-type framing) and
-//! `.../lattice/` (Lattice's rules, engine/contract, and reference
-//! material).
+//! The authoritative narrative lives in the design docs: the performance
+//! testing pages (the test-type framing) and Lattice's own pages (its rules,
+//! engine/contract, and reference material).
 //!
 //! ## Map of the crate
 //!
