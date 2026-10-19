@@ -5,26 +5,26 @@
 // hand-rolled C ABI (alloc / playback_load / playback_board / playback_step /
 // playback_reset; no wasm-bindgen), steps it a tick at a time, and draws the
 // reconstructed factory to a <canvas> using the committed sprite sheet. See:
-//   testing/performance/lattice/architecture.md -> "Browser visualization"
+//   https://docs.testcabinet.ai/testing/performance/lattice/architecture/#browser-playback
 //
 // Correctness is settled at grading time, where the host re-derives each snapshot's
 // checksum from the state returned with it, so a passing run's recorded checksums
 // describe real state rather than a claim. This module still re-derives nothing —
-// holding the rules here is exactly what it must not do — but the player it feeds
-// does check that the frames it is drawing carry those recorded checksums at the
-// ticks the run graded (`drift.ts`), and says so when they do not. Without that
-// check, "re-stepping the module reconstructs the graded factory" is an assumption
-// about the module, not an observation about the frames on screen.
+// holding the rules here is exactly what it must not do — so a player built on it
+// checks that the frames it is drawing carry those recorded checksums at the ticks
+// the run graded, and says so when they do not. Without that check, "re-stepping
+// the module reconstructs the graded factory" is an assumption about the module,
+// not an observation about the frames on screen.
 //
 // It does NOT draw one tick per displayed frame. Ticks are the simulation's
 // discrete steps; items are drawn at INTERPOLATED positions between the two
 // nearest reconstructed ticks (see `interpolate.ts`, which is where the subtlety
 // lives and is unit-tested). Machine animations run on their own sprite clock.
 //
-// The renderer and sprite assets ship with the UI bundle (one set, not per run);
-// only the run-specific scenario is fetched per run. `renderer.vendor.test.ts`
-// byte-checks the vendored engine + atlas against the case bundle so a stale copy
-// fails CI instead of silently drawing a factory that never happened.
+// The reference engine ships with this package as `lattice-core.wasm`, rebuilt from
+// `crates/lattice-core` by `scripts/build-lattice-wasm.sh`; the sprite sheet is the
+// lattice test case's content, which a consumer vendors and hands to `loadSheet`.
+// Only the run-specific scenario (and, for a run, its own engine) is fetched per run.
 
 import {
   type Board,

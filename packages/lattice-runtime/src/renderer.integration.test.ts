@@ -18,9 +18,9 @@ import {
   type ItemPoint,
 } from "./interpolate";
 
-// End-to-end check that the three pieces actually compose: the real vendored
-// `lattice-core.wasm` (the authoritative engine), the real packed atlas, and the
-// renderer. No browser — the canvas is a stub that records what was drawn, which
+// End-to-end check that the three pieces actually compose: the package's own
+// `lattice-core.wasm` (the authoritative engine, the module the package ships), a
+// real packed atlas, and the renderer. No browser — the canvas is a stub that records what was drawn, which
 // is enough to assert the geometry without pixels.
 //
 // This is the test that would catch the whole stack being wired up wrong: an atlas
@@ -28,8 +28,14 @@ import {
 // renderer places at the wrong cell, or an engine whose state shape has drifted
 // from the types.
 
+// The atlas and the reference scenarios are the lattice test case's content, not
+// this package's; `__fixtures__` holds a copy of each (the case's replay bundle's
+// `sheet.json` and `reference-{small,medium,large}.json`) as test data, so the
+// suite needs nothing outside the package. The engine is the module the package
+// publishes, read from where `exports` names it.
 const here = dirname(fileURLToPath(import.meta.url));
-const ASSETS = join(here, "assets");
+const FIXTURES = join(here, "__fixtures__");
+const MODULE = join(here, "..", "lattice-core.wasm");
 
 /** A 2D context stub that records the calls the renderer makes. */
 interface DrawCall {
@@ -119,10 +125,10 @@ let engine: Engine;
 let board: Board;
 
 beforeAll(async () => {
-  atlas = JSON.parse(readFileSync(join(ASSETS, "sheet.json"), "utf8")) as Atlas;
-  engine = await Engine.instantiate(
-    readFileSync(join(ASSETS, "lattice-core.wasm")),
-  );
+  atlas = JSON.parse(
+    readFileSync(join(FIXTURES, "sheet.json"), "utf8"),
+  ) as Atlas;
+  engine = await Engine.instantiate(readFileSync(MODULE));
   expect(engine.load(SCENARIO)).toBe(true);
   board = engine.board();
 });
@@ -209,9 +215,7 @@ describe("lattice playback stack", () => {
     // This deliberately uses its own engine: an earlier version of this test leant
     // on the shared scenario's splitter stalling, which turned out to be a splitter
     // deadlock rather than real back pressure, so the test was asserting a bug.
-    const deadEnd = await Engine.instantiate(
-      readFileSync(join(ASSETS, "lattice-core.wasm")),
-    );
+    const deadEnd = await Engine.instantiate(readFileSync(MODULE));
     expect(
       deadEnd.load({
         version: 1,
@@ -257,9 +261,7 @@ describe("lattice playback stack", () => {
     // of the sink, so it must slide FORWARD into the sink over the tween rather than
     // sit frozen and pop. Uses its own short belt→sink so the leaving pair is easy
     // to find.
-    const line = await Engine.instantiate(
-      readFileSync(join(ASSETS, "lattice-core.wasm")),
-    );
+    const line = await Engine.instantiate(readFileSync(MODULE));
     expect(
       line.load({
         version: 1,
@@ -325,9 +327,7 @@ describe("lattice playback stack", () => {
     // consumed. A sink-bound line must instead be seen flowing, its front item leaving
     // each tick. Source period 1 keeps the belt fully packed — the case a period-4
     // (sparse) belt never exercises.
-    const packed = await Engine.instantiate(
-      readFileSync(join(ASSETS, "lattice-core.wasm")),
-    );
+    const packed = await Engine.instantiate(readFileSync(MODULE));
     expect(
       packed.load({
         version: 1,
@@ -475,9 +475,7 @@ describe("inserter animation", () => {
   };
 
   it("resolves the inserter's swing from the board, not a hard-coded table", async () => {
-    const engine = await Engine.instantiate(
-      readFileSync(join(ASSETS, "lattice-core.wasm")),
-    );
+    const engine = await Engine.instantiate(readFileSync(MODULE));
     expect(engine.load(INSERTER_SCENARIO)).toBe(true);
     const b = engine.board();
     const ins = b.entities.find((e) => e.type === "inserter")!;
@@ -489,9 +487,7 @@ describe("inserter animation", () => {
     // Same boundary as `swing`: the interpolator matches each item to its own
     // next-tick position by how far the belt was expected to carry it, so the
     // speed has to come from the engine rather than a table copied into the UI.
-    const engine = await Engine.instantiate(
-      readFileSync(join(ASSETS, "lattice-core.wasm")),
-    );
+    const engine = await Engine.instantiate(readFileSync(MODULE));
     expect(engine.load(INSERTER_SCENARIO)).toBe(true);
     const b = engine.board();
     const belt = b.entities.find((e) => e.type === "belt")!;
@@ -503,9 +499,7 @@ describe("inserter animation", () => {
   });
 
   it("holds a rest frame while idle and uses delivery frames while carrying", async () => {
-    const engine = await Engine.instantiate(
-      readFileSync(join(ASSETS, "lattice-core.wasm")),
-    );
+    const engine = await Engine.instantiate(readFileSync(MODULE));
     expect(engine.load(INSERTER_SCENARIO)).toBe(true);
     const b = engine.board();
     const insIndex = b.entities.findIndex((e) => e.type === "inserter");
@@ -751,9 +745,7 @@ describe("inserter animation", () => {
     // its own (coal) feed. Stepping the authoritative engine, every tick where an item
     // crosses a curve or side-load must come out of the matcher as ONE gliding pair,
     // never a leaving copy AND an entering copy of the same item — the double image.
-    const eng = await Engine.instantiate(
-      readFileSync(join(ASSETS, "lattice-core.wasm")),
-    );
+    const eng = await Engine.instantiate(readFileSync(MODULE));
     const scenario = {
       version: 1,
       grid: { width: 10, height: 8 },
@@ -845,8 +837,8 @@ describe("inserter animation", () => {
   });
 });
 
-// The Reference tab hands each of these committed scenarios to the vendored engine
-// and draws what comes back. Everything about that path is checked elsewhere except
+// The console's Reference tab hands each of the case's scored scenarios, windowed
+// for playback, to this engine and draws what comes back. Everything about that path is checked elsewhere except
 // the one thing only the real engine can answer: does it ACCEPT them? A windowed
 // scenario is a hand-edited file — its snapshot schedule is rewritten to fit the cut
 // timeline — and `playback_load` reports a rejection as a bare `false`, which the
@@ -856,11 +848,9 @@ describe("reference playback scenarios", () => {
   for (const name of ["small", "medium", "large"]) {
     it(`${name} loads into the reference engine and steps its factory`, async () => {
       const scenario = JSON.parse(
-        readFileSync(join(ASSETS, `reference-${name}.json`), "utf8"),
+        readFileSync(join(FIXTURES, `reference-${name}.json`), "utf8"),
       ) as { grid: { width: number; height: number }; entities: unknown[] };
-      const engine = await Engine.instantiate(
-        readFileSync(join(ASSETS, "lattice-core.wasm")),
-      );
+      const engine = await Engine.instantiate(readFileSync(MODULE));
       expect(engine.load(scenario)).toBe(true);
 
       const board = engine.board();

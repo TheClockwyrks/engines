@@ -30,9 +30,12 @@ between the repositories.
   controllers, and the match runner.
 - `crates/lattice-*`: the performance runtime, Lattice's oracle
   (`lattice-core`), its wasm host, CLI, SDK and reference engines.
-- `packages/ui/src/app/pages/runs/lattice/`: the console's lattice renderer and
-  interpolation and `lattice-core` compiled to the playback ABI, extracted with
-  their history, which become `@clockwyrks/lattice-runtime`.
+- `packages/lattice-runtime` (`@clockwyrks/lattice-runtime`): the browser
+  playback of a lattice factory, the canvas renderer, the interpolation between
+  ticks and `lattice-core` compiled to the playback ABI, committed as
+  `lattice-core.wasm` and exported as the package's `./lattice-core.wasm`
+  subpath. `scripts/build-lattice-wasm.sh` rebuilds the module from the crate
+  whenever the simulation changes. It takes nothing of the project.
 - `history/`: how this repository's history was extracted from the monorepo.
 
 The engines and the voxel and particle runtimes are vendored into a model's

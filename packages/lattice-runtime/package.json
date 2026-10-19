@@ -1,0 +1,37 @@
+{
+  "name": "@clockwyrks/lattice-runtime",
+  "version": "1.1.0",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/TheClockwyrks/engines.git",
+    "directory": "packages/lattice-runtime"
+  },
+  "type": "module",
+  "description": "The browser playback of a lattice factory: the canvas renderer, the interpolation between ticks, and lattice-core compiled to the playback ABI.",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./lattice-core.wasm": "./lattice-core.wasm"
+  },
+  "files": [
+    "dist",
+    "lattice-core.wasm"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "typescript": "^6",
+    "vitest": "^5"
+  },
+  "publishConfig": {
+    "registry": "https://pkgs.dev.azure.com/genyume/the-test-cabinet/_packaging/the-test-cabinet/npm/registry/"
+  }
+}

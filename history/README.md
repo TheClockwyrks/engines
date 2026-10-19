@@ -57,7 +57,8 @@ outside the twenty-four moved directories, exactly twenty-five live files.
 
 Five are the console's lattice playback, which moves here to become
 `@clockwyrks/lattice-runtime`, and which the scaffold commit keeps where it
-found them:
+found them, so the commit after it moves them into `packages/lattice-runtime/`
+with `git mv` and `git log --follow` reaches their history across the move:
 
 ```text
 packages/ui/src/app/pages/runs/lattice/assets/lattice-core.wasm
