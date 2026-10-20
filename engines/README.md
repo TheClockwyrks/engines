@@ -57,13 +57,15 @@ staged into the same host package store as the
 by [`scripts/stage-tcab-packages.mjs`](../scripts/stage-tcab-packages.mjs).
 
 At seed time the core copies the selected engine and its `@clockwyrks` closure
-out of that store into `.vendor/engine/` inside the run repository, copies the
-manifest's `docs` directory to `engine/`, and writes the dependency into the
-seeded workspace's `package.json` as a relative `file:` spec. The build imports
-the engine as an ordinary installed dependency, and the relative path resolves
-wherever the produced tree later lives. This is the one place the harness edits a
-build's `package.json`; a case's declared `packages` are declared by the
-workspace the case ships.
+out of that store into `.vendor/packages/` inside the run repository, committed
+with the initial seed, and copies the manifest's `docs` directory to `engine/`.
+The engine's workspace already declares the dependency on that vendored copy by
+its relative `file:` spec, in its `package.json` and in the `package-lock.json`
+that links it, exactly as a case declares its packages; seeding leaves both files
+as the case wrote them. The case's `init` command, `npm ci`, installs the
+vendored copy the lockfile links, so the build imports the engine as an ordinary
+installed dependency, and the relative path resolves wherever the produced tree
+later lives.
 
 ## Versions
 
