@@ -34,7 +34,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@clockwyrks/asset-contract": "0.2.1"
+    "@clockwyrks/asset-contract": "0.2.2"
   },
   "peerDependencies": {
     "three": "~0.185.0"
