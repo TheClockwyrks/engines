@@ -32,8 +32,8 @@ all = "deny"
 # never names an Azure URL or a path outside the repository: the
 # dependency-edges gate refuses both.
 [workspace.dependencies]
-test-cabinet-contracts = { git = "https://github.com/TheClockwyrks/contracts", tag = "v0.2.3" }
-test-cabinet-suites = { git = "https://github.com/TheClockwyrks/contracts", tag = "v0.2.3" }
+test-cabinet-contracts = { git = "https://github.com/TheClockwyrks/contracts", tag = "v0.2.4" }
+test-cabinet-suites = { git = "https://github.com/TheClockwyrks/contracts", tag = "v0.2.4" }
 
 # The third-party crates the members share, at the requirements the monorepo
 # held them to when the crates were extracted from it.
