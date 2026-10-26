@@ -6,7 +6,7 @@
 //! validator scores a run by playing its submission against the case's committed
 //! baselines through [`play_match`]; the **arena** plays any two controllers
 //! (baselines or controllers built by prior runs) through [`run_quick_match`] and
-//! a whole field through [`run_tournament`], which are built on it. This crate is
+//! the pairings of a field through [`run_tournament`], which are built on it. This crate is
 //! the one place the canonical match parameters (map, seed, sandbox, simulation)
 //! are assembled, so the validator and the arena can never disagree on how a match
 //! is played.
@@ -19,10 +19,11 @@
 //! however it likes (a baseline from the case's `references/`, a prior run's module
 //! from the host's run output dir) and hands them in as [`ResolvedController`]s.
 //! The persistence-owning caller (the arena service, or a validator writing into a
-//! run tree) owns the disk writes, progress reporting and publishing; this crate
+//! run tree) owns the disk writes, progress reporting and recording; this crate
 //! only plays matches and tallies results.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
+use std::ops::ControlFlow;
 use std::path::Path;
 
 use foray_core::board::Team;
@@ -74,14 +75,16 @@ pub struct MatchOutcome {
     pub replay: Option<Replay>,
 }
 
-/// A tournament ready to persist: the record plus each match's replay, keyed by
-/// the match id (the caller writes these out and serves them on demand).
+/// One tournament match as it completes: its summary, and its replay when one was
+/// produced. A load forfeit produces no replay, and its summary's `replay_key` is
+/// `None`; a played match's `replay_key` is its match id, the segment the caller
+/// stores the replay under.
 #[derive(Debug, Clone)]
-pub struct TournamentBuild {
-    /// The standings/summaries record.
-    pub record: TournamentRecord,
-    /// `(match_id, replay)` for every match that produced a replay.
-    pub replays: Vec<(String, Replay)>,
+pub struct TournamentMatch {
+    /// The match summary.
+    pub summary: MatchSummary,
+    /// The browser-playable replay, or `None` when no match ran.
+    pub replay: Option<Replay>,
 }
 
 /// Build the canonical [`MatchSetup`] for `test_case` with the given participant
@@ -282,87 +285,118 @@ pub fn run_quick_match(
     }
 }
 
-/// Run a round-robin tournament: every unordered pair of `participants` plays
-/// exactly once, with a deterministic seat assignment (the lower-sorted id is
-/// always Red) so the field is reproducible. The standings rank by **number of
-/// wins**, highest first — and because a level-score match is broken by the
-/// efficiency tie-break, a leaner controller banks a win where it would once have
-/// drawn.
-pub fn run_tournament(
-    test_case: &TestCaseVersion,
-    variant: &str,
-    tournament_id: &str,
-    created_at: &str,
-    mut participants: Vec<ResolvedController>,
-    mut on_match: impl FnMut(usize, usize, &MatchSummary),
-) -> Result<TournamentBuild> {
-    // Sort by id so the Red/Blue seat for any pair is stable across runs.
-    participants.sort_by(|a, b| a.controller.id.cmp(&b.controller.id));
-
-    let mut matches: Vec<MatchSummary> = Vec::new();
-    let mut replays: Vec<(String, Replay)> = Vec::new();
-    let mut wins: BTreeMap<String, u32> = BTreeMap::new();
-    let mut losses: BTreeMap<String, u32> = BTreeMap::new();
-    let mut draws: BTreeMap<String, u32> = BTreeMap::new();
-    for participant in &participants {
-        wins.entry(participant.controller.id.clone()).or_insert(0);
-        losses.entry(participant.controller.id.clone()).or_insert(0);
-        draws.entry(participant.controller.id.clone()).or_insert(0);
-    }
-
-    let total = participants.len();
-    let mut played = 0usize;
-    let pair_count = total * total.saturating_sub(1) / 2;
-    for i in 0..total {
-        for j in (i + 1)..total {
-            let red = &participants[i];
-            let blue = &participants[j];
-            let outcome = run_quick_match(test_case, red, blue)?;
-            let mut summary = outcome.summary;
-
-            // `summary.winner` already carries the efficiency tie-break, so the
-            // win/loss/draw tally counts a level-score match for the leaner side.
-            match summary.winner.as_deref() {
-                Some(w) if w == summary.red_id => {
-                    *wins.get_mut(&summary.red_id).unwrap() += 1;
-                    *losses.get_mut(&summary.blue_id).unwrap() += 1;
-                }
-                Some(_) => {
-                    *wins.get_mut(&summary.blue_id).unwrap() += 1;
-                    *losses.get_mut(&summary.red_id).unwrap() += 1;
-                }
-                None => {
-                    *draws.get_mut(&summary.red_id).unwrap() += 1;
-                    *draws.get_mut(&summary.blue_id).unwrap() += 1;
-                }
-            }
-
-            // A quick match hands its replay straight back, so `run_quick_match`
-            // leaves the key unset; a tournament persists each replay under the
-            // match id, so record that segment here. A load forfeit produces no
-            // replay and keeps the key `None`.
-            if let Some(replay) = outcome.replay {
-                summary.replay_key = Some(summary.match_id.clone());
-                replays.push((summary.match_id.clone(), replay));
-            }
-            played += 1;
-            on_match(played, pair_count, &summary);
-            matches.push(summary);
+/// Every pairing of a round-robin field: each unordered pair of `participants`
+/// once, with a deterministic seat assignment (the lower-sorted id is always Red),
+/// in the order a tournament plays them. A field naming one id twice pairs it with
+/// itself, so a caller refuses such a field before pairing it.
+pub fn tournament_pairings(participants: &[ControllerRef]) -> Vec<TournamentPairing> {
+    let mut ids: Vec<&str> = participants.iter().map(|p| p.id.as_str()).collect();
+    ids.sort_unstable();
+    let mut pairings = Vec::with_capacity(ids.len() * ids.len().saturating_sub(1) / 2);
+    for (i, red) in ids.iter().enumerate() {
+        for blue in &ids[i + 1..] {
+            pairings.push(TournamentPairing {
+                match_id: match_id(red, blue),
+                red_id: red.to_string(),
+                blue_id: blue.to_string(),
+            });
         }
     }
+    pairings
+}
 
-    // Rank by wins desc, then fewest losses, then id asc for a stable order.
-    let mut standings: Vec<Standing> = participants
+/// Play the given `pairings` of a tournament between `participants`, reporting
+/// each match to `on_match` as it completes. A caller plays a whole field by
+/// passing every [`tournament_pairings`] entry, and resumes one by passing only
+/// the pairings without a recorded result.
+///
+/// `on_match` answers [`ControlFlow::Break`] to stop before the next pairing,
+/// which is how a caller stops on a shutdown or a failed write. A pairing naming
+/// a participant that is not in `participants` is [`Error::Case`], and a wasm
+/// engine failure is [`Error::Engine`]; either stops the tournament there.
+pub fn run_tournament(
+    test_case: &TestCaseVersion,
+    participants: &[ResolvedController],
+    pairings: &[TournamentPairing],
+    mut on_match: impl FnMut(TournamentMatch) -> ControlFlow<()>,
+) -> Result<()> {
+    let by_id: HashMap<&str, &ResolvedController> = participants
         .iter()
-        .map(|participant| {
-            let id = &participant.controller.id;
-            Standing {
-                participant_id: id.clone(),
-                wins: wins[id],
-                losses: losses[id],
-                draws: draws[id],
-                rank: 0,
+        .map(|participant| (participant.controller.id.as_str(), participant))
+        .collect();
+    let participant = |id: &str| {
+        by_id.get(id).copied().ok_or_else(|| {
+            Error::Case(format!(
+                "the tournament pairs `{id}`, which is not one of its participants"
+            ))
+        })
+    };
+    for pairing in pairings {
+        let red = participant(&pairing.red_id)?;
+        let blue = participant(&pairing.blue_id)?;
+        let outcome = run_quick_match(test_case, red, blue)?;
+        let mut summary = outcome.summary;
+        // A quick match hands its replay straight back, so `run_quick_match`
+        // leaves the key unset; a tournament stores each replay under the match
+        // id, so record that segment here. A load forfeit keeps the key `None`.
+        if outcome.replay.is_some() {
+            summary.replay_key = Some(summary.match_id.clone());
+        }
+        let played = TournamentMatch {
+            summary,
+            replay: outcome.replay,
+        };
+        if on_match(played).is_break() {
+            break;
+        }
+    }
+    Ok(())
+}
+
+/// The standings `matches` come to over `participants`, ranked by **number of
+/// wins**, highest first, then by fewest losses, then by id. Because a
+/// level-score match is broken by the efficiency tie-break, a leaner controller
+/// banks a win where it would once have drawn. A match naming a controller outside
+/// `participants` counts for its other side alone.
+pub fn tournament_standings(
+    participants: &[ControllerRef],
+    matches: &[MatchSummary],
+) -> Vec<Standing> {
+    let mut tally: BTreeMap<&str, (u32, u32, u32)> = participants
+        .iter()
+        .map(|participant| (participant.id.as_str(), (0, 0, 0)))
+        .collect();
+    let mut count = |id: &str, outcome: fn(&mut (u32, u32, u32))| {
+        if let Some(entry) = tally.get_mut(id) {
+            outcome(entry);
+        }
+    };
+    for summary in matches {
+        // `summary.winner` already carries the efficiency tie-break, so the
+        // win/loss/draw tally counts a level-score match for the leaner side.
+        match summary.winner.as_deref() {
+            Some(winner) if winner == summary.red_id => {
+                count(&summary.red_id, |t| t.0 += 1);
+                count(&summary.blue_id, |t| t.1 += 1);
             }
+            Some(_) => {
+                count(&summary.blue_id, |t| t.0 += 1);
+                count(&summary.red_id, |t| t.1 += 1);
+            }
+            None => {
+                count(&summary.red_id, |t| t.2 += 1);
+                count(&summary.blue_id, |t| t.2 += 1);
+            }
+        }
+    }
+    let mut standings: Vec<Standing> = tally
+        .into_iter()
+        .map(|(id, (wins, losses, draws))| Standing {
+            participant_id: id.to_string(),
+            wins,
+            losses,
+            draws,
+            rank: 0,
         })
         .collect();
     standings.sort_by(|a, b| {
@@ -374,21 +408,7 @@ pub fn run_tournament(
     for (index, standing) in standings.iter_mut().enumerate() {
         standing.rank = index as u32 + 1;
     }
-
-    let record = TournamentRecord {
-        id: tournament_id.to_string(),
-        created_at: created_at.to_string(),
-        test_case_slug: test_case.slug.clone(),
-        test_case_version: test_case.version.clone(),
-        variant: variant.to_string(),
-        participants: participants
-            .into_iter()
-            .map(|participant| participant.controller)
-            .collect(),
-        standings,
-        matches,
-    };
-    Ok(TournamentBuild { record, replays })
+    standings
 }
 
 /// Render a mid-match forfeit into the human-readable `detail` the summary carries
