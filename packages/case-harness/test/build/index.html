@@ -92,23 +92,41 @@
       state.sounds += 1;
     }
 
-    // A looping bed, started well after the tick that asked for it — the way a
-    // build whose bed waits on a decoded file starts its own. Nothing can observe
-    // it on that tick, which is what a wait for it has to survive. The delay is
-    // long enough that no single crossing into this page can cover it, and short
-    // enough that a wait stepping one tick per crossing finds it easily.
-    const BED_DELAY_MS = 100;
+    // A looping bed, started on a later TICK than the one that asked for it — the
+    // way a build whose bed waits on a decoded file starts its own. Asking only
+    // begins the "decode", which settles on a microtask: when the evaluation that
+    // asked for it ends, and so before the next crossing. The bed itself starts on
+    // the first tick that runs once it has settled, exactly as a conformant build
+    // asks again on its next frame. So nothing can observe it on the frame it was
+    // asked for, and no single drive can cover it (a microtask cannot run inside
+    // one synchronous evaluation), while a wait stepping one tick per crossing
+    // finds it on the very next frame.
+    //
+    // Settled on a microtask rather than on a timer task: a timer runs whenever
+    // the browser schedules it, so a bed gated on one starts on whichever frame
+    // the scheduler happened to reach, and a bed that started after some
+    // milliseconds of WALL-CLOCK time would already be running on the asking frame
+    // whenever the host was slow between two crossings. Both are readings about
+    // the machine's load rather than about the build. A microtask settles at the
+    // end of the asking evaluation, every time.
     let bedSource = null;
+    let bedWanted = false;
+    let bedDecoded = false;
     function bed() {
       audio ??= new (window.AudioContext || window.webkitAudioContext)();
-      setTimeout(() => {
-        const source = audio.createBufferSource();
-        source.buffer = audio.createBuffer(1, 128, audio.sampleRate);
-        source.loop = true;
-        source.connect(audio.destination);
-        source.start();
-        bedSource = source;
-      }, BED_DELAY_MS);
+      bedWanted = true;
+      queueMicrotask(() => {
+        bedDecoded = true;
+      });
+    }
+    function startBedIfReady() {
+      if (!bedWanted || !bedDecoded || bedSource !== null) return;
+      const source = audio.createBufferSource();
+      source.buffer = audio.createBuffer(1, 128, audio.sampleRate);
+      source.loop = true;
+      source.connect(audio.destination);
+      source.start();
+      bedSource = source;
     }
 
     function fit() {
@@ -155,6 +173,7 @@
       state.frames += 1;
       state.x = (state.x + 2) % STAGE_W;
       if (held.size > 0) state.heldTicks += 1;
+      startBedIfReady();
       if (state.screen === "playing" && state.frames % CUE_EVERY === 0) blip();
       draw();
     }
@@ -197,6 +216,8 @@
         held.clear();
         bedSource?.stop();
         bedSource = null;
+        bedWanted = false;
+        bedDecoded = false;
         draw();
       },
       advance(count) {

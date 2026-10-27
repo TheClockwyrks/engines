@@ -4,8 +4,12 @@
 // a bed asked for on one frame starts on a later one — and a drive runs its whole
 // count inside ONE evaluation in the page, where nothing the page awaits can
 // settle. These two waits step a frame at a time for exactly that reason, and the
-// fixture's bed reproduces it: it is asked for on one frame and starts a turn of
-// the event loop later.
+// fixture's bed reproduces it: it is asked for on one frame, its decode settles on
+// a microtask when the asking evaluation ends, and it starts on the first tick
+// after that. Its start is counted in ticks, never in wall-clock time or timer
+// tasks, so neither how slowly the host gets from one crossing to the next nor
+// how the browser schedules its tasks can move it off the frame after the asking
+// one.
 
 import { afterEach, beforeEach, expect, it } from "vitest";
 import { stepUntilBed, stepUntilSound } from "../src/index";
@@ -39,6 +43,8 @@ it("steps until a bed that starts late is running, and counts its start", async 
   expect(await h.loopingSounds()).toBe(0);
 
   expect(await stepUntilBed(h)).toBe(1);
+  // Exactly one frame later: the decode settled before the first crossing.
+  expect(h.frame()).toBe(1);
   expect(await h.loopingSounds()).toBe(1);
   expect(await h.loopStarts()).toBe(1);
 });

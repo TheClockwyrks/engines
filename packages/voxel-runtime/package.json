@@ -1,6 +1,6 @@
 {
   "name": "@clockwyrks/voxel-runtime",
-  "version": "1.1.0",
+  "version": "1.1.4",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -30,7 +30,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@clockwyrks/asset-contract": "0.2.0"
+    "@clockwyrks/asset-contract": "0.2.4"
   },
   "peerDependencies": {
     "three": "~0.185.0"

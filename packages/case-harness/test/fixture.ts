@@ -93,7 +93,7 @@ export interface FixtureDebug {
   reset(options?: { seed: number }): Promise<void>;
   startPlaying(): Promise<void>;
   blip(): Promise<void>;
-  /** Ask for the looping bed, which starts a turn of the event loop later. */
+  /** Ask for the looping bed, which starts on a later tick than this one. */
   bed(): Promise<void>;
   /** Put the moving landmark somewhere, so a batch of calls has an argument. */
   setX(value: number): Promise<void>;
