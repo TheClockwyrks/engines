@@ -188,60 +188,83 @@ fn an_unloadable_controller_forfeits_with_no_replay() {
     assert!(summary.detail.is_some(), "the load failure is reported");
 }
 
+/// The controller identities of `participants`.
+fn refs(participants: &[ResolvedController]) -> Vec<ControllerRef> {
+    participants.iter().map(|p| p.controller.clone()).collect()
+}
+
+/// Play `pairings` of `participants` to the end, collecting every match.
+fn play_all(
+    version: &TestCaseVersion,
+    participants: &[ResolvedController],
+    pairings: &[TournamentPairing],
+) -> Vec<TournamentMatch> {
+    let mut played = Vec::new();
+    run_tournament(version, participants, pairings, |played_match| {
+        played.push(played_match);
+        ControlFlow::Continue(())
+    })
+    .expect("tournament");
+    played
+}
+
 #[test]
-fn a_tournament_runs_every_pair_once_and_ranks_by_wins() {
+fn the_pairings_seat_the_lower_id_as_red_once_per_pair() {
+    let field: Vec<ControllerRef> = ["random", "border-soldier", "greedy-raider"]
+        .iter()
+        .map(|id| ControllerRef {
+            id: id.to_string(),
+            kind: ControllerKind::Baseline,
+            label: None,
+        })
+        .collect();
+    let ids: Vec<String> = tournament_pairings(&field)
+        .into_iter()
+        .map(|pairing| pairing.match_id)
+        .collect();
+    assert_eq!(
+        ids,
+        vec![
+            match_id("border-soldier", "greedy-raider"),
+            match_id("border-soldier", "random"),
+            match_id("greedy-raider", "random"),
+        ]
+    );
+}
+
+#[test]
+fn a_tournament_plays_every_pairing_once_and_ranks_by_wins() {
     let version = foray_version(1_500);
     let participants = vec![
         baseline(&version, "border-soldier"),
         baseline(&version, "greedy-raider"),
         baseline(&version, "random"),
     ];
+    let pairings = tournament_pairings(&refs(&participants));
+    let played = play_all(&version, &participants, &pairings);
 
-    let mut progress = 0usize;
-    let build = run_tournament(
-        &version,
-        "base",
-        "tourney-1",
-        "2026-06-21T00:00:00Z",
-        participants,
-        |played, total, _summary| {
-            progress += 1;
-            assert_eq!(total, 3, "three participants make three pairs");
-            assert_eq!(played, progress);
-        },
-    )
-    .expect("tournament");
-
-    // C(3,2) = 3 matches, each reported once.
-    assert_eq!(build.record.matches.len(), 3);
-    assert_eq!(progress, 3);
-
-    // Every match has a distinct, deterministic seat assignment (lower id = Red).
-    for summary in &build.record.matches {
-        assert!(summary.red_id < summary.blue_id, "lower id seats as Red");
-    }
+    // C(3,2) = 3 matches, each reported once, in pairing order.
+    let ids: Vec<&str> = played.iter().map(|m| m.summary.match_id.as_str()).collect();
+    let expected: Vec<&str> = pairings.iter().map(|p| p.match_id.as_str()).collect();
+    assert_eq!(ids, expected);
 
     // Every match played produces a replay, and its summary points at the segment
-    // the replay is persisted under — without the key the board's Replay control
+    // the replay is stored under; without the key the board's Replay control
     // stays disabled.
-    assert_eq!(build.replays.len(), 3, "every pair produces a replay");
-    for summary in &build.record.matches {
+    for played_match in &played {
+        assert!(
+            played_match.replay.is_some(),
+            "every pair produces a replay"
+        );
         assert_eq!(
-            summary.replay_key.as_deref(),
-            Some(summary.match_id.as_str()),
+            played_match.summary.replay_key.as_deref(),
+            Some(played_match.summary.match_id.as_str()),
             "a played match keys its replay by the match id",
         );
     }
-    let keys: Vec<&str> = build.replays.iter().map(|(id, _)| id.as_str()).collect();
-    for summary in &build.record.matches {
-        assert!(
-            keys.contains(&summary.match_id.as_str()),
-            "the keyed replay is actually among the ones persisted",
-        );
-    }
 
-    // Standings rank all three, 1..=3, sorted by wins descending.
-    let standings = &build.record.standings;
+    let summaries: Vec<MatchSummary> = played.into_iter().map(|m| m.summary).collect();
+    let standings = tournament_standings(&refs(&participants), &summaries);
     assert_eq!(standings.len(), 3);
     let ranks: Vec<u32> = standings.iter().map(|s| s.rank).collect();
     assert_eq!(ranks, vec![1, 2, 3]);
@@ -251,26 +274,135 @@ fn a_tournament_runs_every_pair_once_and_ranks_by_wins() {
             "standings are sorted by wins, highest first"
         );
     }
-
-    for standing in standings {
+    for standing in &standings {
         let id = &standing.participant_id;
         // A participant's wins are exactly the matches it was crowned the winner of
         // — and with the efficiency tie-break, a level-score match still has one.
-        let won = build
-            .record
-            .matches
+        let won = summaries
             .iter()
             .filter(|m| m.winner.as_deref() == Some(id.as_str()))
             .count() as u32;
         assert_eq!(standing.wins, won, "wins == matches won");
-        // Each controller meets the other two exactly once, so its record accounts
-        // for two matches.
-        assert_eq!(
-            standing.wins + standing.losses + standing.draws,
-            2,
-            "every participant plays two matches in a three-controller field",
-        );
+        // Each controller meets the other two exactly once.
+        assert_eq!(standing.wins + standing.losses + standing.draws, 2);
     }
+}
+
+#[test]
+fn a_resumed_tournament_plays_only_the_pairings_it_is_given() {
+    let version = foray_version(64);
+    let participants = vec![
+        baseline(&version, "border-soldier"),
+        baseline(&version, "greedy-raider"),
+        baseline(&version, "random"),
+    ];
+    let pairings = tournament_pairings(&refs(&participants));
+    let played = play_all(&version, &participants, &pairings[1..]);
+    let ids: Vec<&str> = played.iter().map(|m| m.summary.match_id.as_str()).collect();
+    assert_eq!(
+        ids,
+        vec![pairings[1].match_id.as_str(), pairings[2].match_id.as_str()]
+    );
+}
+
+#[test]
+fn a_break_stops_the_tournament_before_the_next_pairing() {
+    let version = foray_version(64);
+    let participants = vec![
+        baseline(&version, "border-soldier"),
+        baseline(&version, "greedy-raider"),
+        baseline(&version, "random"),
+    ];
+    let pairings = tournament_pairings(&refs(&participants));
+    let mut reported = 0;
+    run_tournament(&version, &participants, &pairings, |_| {
+        reported += 1;
+        ControlFlow::Break(())
+    })
+    .expect("tournament");
+    assert_eq!(reported, 1);
+}
+
+#[test]
+fn a_load_forfeit_reports_its_summary_without_a_replay() {
+    let version = foray_version(64);
+    let participants = vec![
+        ResolvedController {
+            controller: ControllerRef {
+                id: "broken".to_string(),
+                kind: ControllerKind::PushedRun,
+                label: None,
+            },
+            wasm: b"\0not-wasm".to_vec(),
+        },
+        baseline(&version, "random"),
+    ];
+    let pairings = tournament_pairings(&refs(&participants));
+    let played = play_all(&version, &participants, &pairings);
+    assert_eq!(played.len(), 1);
+    assert!(played[0].replay.is_none());
+    assert_eq!(played[0].summary.replay_key, None);
+    assert_eq!(played[0].summary.win_type, "forfeit");
+}
+
+#[test]
+fn a_pairing_outside_the_field_is_a_case_error() {
+    let version = foray_version(64);
+    let participants = vec![baseline(&version, "random")];
+    let pairings = vec![TournamentPairing {
+        match_id: match_id("ghost", "random"),
+        red_id: "ghost".to_string(),
+        blue_id: "random".to_string(),
+    }];
+    let err = run_tournament(&version, &participants, &pairings, |_| {
+        ControlFlow::Continue(())
+    })
+    .expect_err("an unknown participant");
+    assert!(matches!(err, Error::Case(_)), "{err}");
+}
+
+#[test]
+fn the_standings_count_a_draw_for_both_sides_and_break_ties_by_losses_then_id() {
+    let field: Vec<ControllerRef> = ["a", "b", "c"]
+        .iter()
+        .map(|id| ControllerRef {
+            id: id.to_string(),
+            kind: ControllerKind::Baseline,
+            label: None,
+        })
+        .collect();
+    let summary = |red: &str, blue: &str, winner: Option<&str>| MatchSummary {
+        match_id: match_id(red, blue),
+        red_id: red.to_string(),
+        blue_id: blue.to_string(),
+        winner: winner.map(str::to_string),
+        win_type: "time_limit".to_string(),
+        outcome_for_red: AdversarialOutcome::Draw,
+        red_score: 0,
+        blue_score: 0,
+        ticks: 1,
+        red_kills: 0,
+        blue_kills: 0,
+        red_fuel: 0,
+        blue_fuel: 0,
+        replay_key: None,
+        detail: None,
+    };
+    let matches = vec![
+        summary("a", "b", None),
+        summary("a", "c", Some("c")),
+        summary("b", "c", Some("b")),
+    ];
+    let standings = tournament_standings(&field, &matches);
+    let order: Vec<(&str, u32, u32, u32, u32)> = standings
+        .iter()
+        .map(|s| (s.participant_id.as_str(), s.wins, s.losses, s.draws, s.rank))
+        .collect();
+    // b and c each won one; b lost none (a draw), so it ranks above c.
+    assert_eq!(
+        order,
+        vec![("b", 1, 0, 1, 1), ("c", 1, 1, 0, 2), ("a", 0, 1, 1, 3)]
+    );
 }
 
 #[test]
